@@ -1,4 +1,4 @@
-module github.com/libp2p/go-libp2p-pubsub
+module github.com/DXPlus/go-libp2p-pubsub-abci
 
 go 1.19
 
