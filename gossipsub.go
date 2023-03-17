@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -220,22 +221,23 @@ func NewGossipSubWithRouter(ctx context.Context, h host.Host, rt PubSubRouter, o
 func DefaultGossipSubRouter(h host.Host) *GossipSubRouter {
 	params := DefaultGossipSubParams()
 	return &GossipSubRouter{
-		peers:     make(map[peer.ID]protocol.ID),
-		mesh:      make(map[string]map[peer.ID]struct{}),
-		fanout:    make(map[string]map[peer.ID]struct{}),
-		lastpub:   make(map[string]int64),
-		gossip:    make(map[peer.ID][]*pb.ControlIHave),
-		control:   make(map[peer.ID]*pb.ControlMessage),
-		backoff:   make(map[string]map[peer.ID]time.Time),
-		peerhave:  make(map[peer.ID]int),
-		iasked:    make(map[peer.ID]int),
-		outbound:  make(map[peer.ID]bool),
-		connect:   make(chan connectInfo, params.MaxPendingConnections),
-		mcache:    NewMessageCache(params.HistoryGossip, params.HistoryLength),
-		protos:    GossipSubDefaultProtocols,
-		feature:   GossipSubDefaultFeatures,
-		tagTracer: newTagTracer(h.ConnManager()),
-		params:    params,
+		peers:      make(map[peer.ID]protocol.ID),
+		gossiponly: make(map[string]struct{}),
+		mesh:       make(map[string]map[peer.ID]struct{}),
+		fanout:     make(map[string]map[peer.ID]struct{}),
+		lastpub:    make(map[string]int64),
+		gossip:     make(map[peer.ID][]*pb.ControlIHave),
+		control:    make(map[peer.ID]*pb.ControlMessage),
+		backoff:    make(map[string]map[peer.ID]time.Time),
+		peerhave:   make(map[peer.ID]int),
+		iasked:     make(map[peer.ID]int),
+		outbound:   make(map[peer.ID]bool),
+		connect:    make(chan connectInfo, params.MaxPendingConnections),
+		mcache:     NewMessageCache(params.HistoryGossip, params.HistoryLength),
+		protos:     GossipSubDefaultProtocols,
+		feature:    GossipSubDefaultFeatures,
+		tagTracer:  newTagTracer(h.ConnManager()),
+		params:     params,
 	}
 }
 
@@ -418,19 +420,20 @@ func WithGossipSubParams(cfg GossipSubParams) Option {
 // is the fanout map. Fanout peer lists are expired if we don't publish any
 // messages to their topic for GossipSubFanoutTTL.
 type GossipSubRouter struct {
-	p        *PubSub
-	peers    map[peer.ID]protocol.ID          // peer protocols
-	direct   map[peer.ID]struct{}             // direct peers
-	mesh     map[string]map[peer.ID]struct{}  // topic meshes
-	fanout   map[string]map[peer.ID]struct{}  // topic fanout
-	lastpub  map[string]int64                 // last publish time for fanout topics
-	gossip   map[peer.ID][]*pb.ControlIHave   // pending gossip
-	control  map[peer.ID]*pb.ControlMessage   // pending control messages
-	peerhave map[peer.ID]int                  // number of IHAVEs received from peer in the last heartbeat
-	iasked   map[peer.ID]int                  // number of messages we have asked from peer in the last heartbeat
-	outbound map[peer.ID]bool                 // connection direction cache, marks peers with outbound connections
-	backoff  map[string]map[peer.ID]time.Time // prune backoff
-	connect  chan connectInfo                 // px connection requests
+	p          *PubSub
+	peers      map[peer.ID]protocol.ID          // peer protocols
+	direct     map[peer.ID]struct{}             // direct peers
+	gossiponly map[string]struct{}              // gossip only topic
+	mesh       map[string]map[peer.ID]struct{}  // topic meshes
+	fanout     map[string]map[peer.ID]struct{}  // topic fanout
+	lastpub    map[string]int64                 // last publish time for fanout topics
+	gossip     map[peer.ID][]*pb.ControlIHave   // pending gossip
+	control    map[peer.ID]*pb.ControlMessage   // pending control messages
+	peerhave   map[peer.ID]int                  // number of IHAVEs received from peer in the last heartbeat
+	iasked     map[peer.ID]int                  // number of messages we have asked from peer in the last heartbeat
+	outbound   map[peer.ID]bool                 // connection direction cache, marks peers with outbound connections
+	backoff    map[string]map[peer.ID]time.Time // prune backoff
+	connect    chan connectInfo                 // px connection requests
 
 	protos  []protocol.ID
 	feature GossipSubFeatureTest
@@ -978,6 +981,12 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 	from := msg.ReceivedFrom
 	topic := msg.GetTopic()
 
+	// for gossiponly topic
+	_, ok := gs.gossiponly[topic]
+	if ok {
+		return
+	}
+
 	tosend := make(map[peer.ID]struct{})
 
 	// any peers in the topic?
@@ -1045,6 +1054,15 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 }
 
 func (gs *GossipSubRouter) Join(topic string) {
+	// Is this topic a Gossip-Only topic
+	if IsGossipOnlyTopic(topic) {
+		gs.gossiponly[topic] = struct{}{}
+		log.Debugf("JOIN %s", topic)
+		gs.tracer.Join(topic)
+		delete(gs.fanout, topic)
+		return
+	}
+
 	gmap, ok := gs.mesh[topic]
 	if ok {
 		return
@@ -1595,6 +1613,11 @@ func (gs *GossipSubRouter) heartbeat() {
 		gs.emitGossip(topic, peers)
 	}
 
+	// send message to gossiponly topic
+	for topic := range gs.gossiponly {
+		gs.emitGossip(topic, nil)
+	}
+
 	// send coalesced GRAFT/PRUNE messages (will piggyback gossip)
 	gs.sendGraftPrune(tograft, toprune, noPX)
 
@@ -1960,4 +1983,10 @@ func shuffleStrings(lst []string) {
 		j := rand.Intn(i + 1)
 		lst[i], lst[j] = lst[j], lst[i]
 	}
+}
+
+func IsGossipOnlyTopic(topic string) bool {
+	// "alll-gasd-type: GossipOnlyTopic"
+	flag := "type: GossipOnlyTopic"
+	return strings.Contains(topic, flag)
 }
