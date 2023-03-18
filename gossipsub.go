@@ -631,6 +631,8 @@ func (gs *GossipSubRouter) HandleRPC(rpc *RPC) {
 }
 
 func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.ControlIWant {
+
+	fmt.Println("some say I have: ", ctl)
 	// we ignore IHAVE gossip from any peer whose score is below the gossip threshold
 	score := gs.score.Score(p)
 	if score < gs.gossipThreshold {
@@ -685,6 +687,8 @@ func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.
 	for mid := range iwant {
 		iwantlst = append(iwantlst, mid)
 	}
+
+	fmt.Println("I say iwant: ", iwantlst)
 
 	// ask in random order
 	shuffleStrings(iwantlst)
