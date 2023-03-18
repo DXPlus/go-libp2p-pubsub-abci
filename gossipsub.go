@@ -1618,7 +1618,9 @@ func (gs *GossipSubRouter) heartbeat() {
 	// send message to gossiponly topic
 	for topic := range gs.gossiponly {
 		fmt.Println("Heartbeat emitGossip")
-		gs.emitGossip(topic, nil)
+		//var mypeers map[peer.ID]struct{}
+		mypeers := make(map[peer.ID]struct{})
+		gs.emitGossip(topic, mypeers)
 	}
 
 	// send coalesced GRAFT/PRUNE messages (will piggyback gossip)
