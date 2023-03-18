@@ -700,7 +700,10 @@ func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.
 
 func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.Message {
 	// we don't respond to IWANT requests from any peer whose score is below the gossip threshold
+
 	score := gs.score.Score(p)
+
+	fmt.Println("Score: ", score)
 	if score < gs.gossipThreshold {
 		log.Debugf("IWANT: ignoring peer %s with score below threshold [score = %f]", p, score)
 		return nil
@@ -709,6 +712,7 @@ func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.
 	ihave := make(map[string]*pb.Message)
 	for _, iwant := range ctl.GetIwant() {
 		for _, mid := range iwant.GetMessageIDs() {
+			fmt.Printf("%s say: I want: %s", p, mid)
 			msg, count, ok := gs.mcache.GetForPeer(mid, p)
 			if !ok {
 				continue
