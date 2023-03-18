@@ -984,6 +984,7 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 	// for gossiponly topic
 	_, ok := gs.gossiponly[topic]
 	if ok {
+		fmt.Println("gossiponly topic publish")
 		return
 	}
 
@@ -1361,6 +1362,7 @@ func (gs *GossipSubRouter) heartbeatTimer() {
 }
 
 func (gs *GossipSubRouter) heartbeat() {
+	fmt.Println("-----------------One Heartbeat----------------")
 	start := time.Now()
 	defer func() {
 		if gs.params.SlowHeartbeatWarning > 0 {
@@ -1615,6 +1617,7 @@ func (gs *GossipSubRouter) heartbeat() {
 
 	// send message to gossiponly topic
 	for topic := range gs.gossiponly {
+		fmt.Println("Heartbeat emitGossip")
 		gs.emitGossip(topic, nil)
 	}
 
@@ -1987,6 +1990,7 @@ func shuffleStrings(lst []string) {
 
 func IsGossipOnlyTopic(topic string) bool {
 	// "alll-gasd-type: GossipOnlyTopic"
-	flag := "type: GossipOnlyTopic"
+	flag := "GossipOnlyTopic"
+	fmt.Println("IsGossipOnlyTopic: ", topic)
 	return strings.Contains(topic, flag)
 }
