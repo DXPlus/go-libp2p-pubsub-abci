@@ -993,6 +993,7 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 	// any peers in the topic?
 	tmap, ok := gs.p.topics[topic]
 	if !ok {
+		fmt.Println("No peers in the topic.")
 		return
 	}
 
@@ -1776,6 +1777,8 @@ func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}
 		shufflePeers(peers)
 	}
 	peers = peers[:target]
+
+	fmt.Println("Peers: ", peers)
 
 	// Emit the IHAVE gossip to the selected peers.
 	for _, p := range peers {
