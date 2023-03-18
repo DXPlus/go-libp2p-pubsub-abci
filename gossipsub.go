@@ -1739,6 +1739,7 @@ func (gs *GossipSubRouter) sendGraftPrune(tograft, toprune map[peer.ID][]string,
 // of this topic.
 func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}) {
 	mids := gs.mcache.GetGossipIDs(topic)
+	fmt.Println("mids: ", mids)
 	if len(mids) == 0 {
 		return
 	}
@@ -1791,6 +1792,8 @@ func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}
 			shuffleStrings(mids)
 			copy(peerMids, mids)
 		}
+		fmt.Println("topic: ", topic)
+		fmt.Println("peerMids: ", peerMids)
 		gs.enqueueGossip(p, &pb.ControlIHave{TopicID: &topic, MessageIDs: peerMids})
 	}
 }
@@ -1800,6 +1803,7 @@ func (gs *GossipSubRouter) flush() {
 	for p, ihave := range gs.gossip {
 		delete(gs.gossip, p)
 		out := rpcWithControl(nil, ihave, nil, nil, nil)
+		fmt.Println("SendRPC: ", out)
 		gs.sendRPC(p, out)
 	}
 
