@@ -655,8 +655,9 @@ func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.
 	iwant := make(map[string]struct{})
 	for _, ihave := range ctl.GetIhave() {
 		topic := ihave.GetTopicID()
-		_, ok := gs.mesh[topic]
-		if !ok {
+		_, meshok := gs.mesh[topic]
+		_, gossipok := gs.gossiponly[topic]
+		if (!meshok) && (!gossipok) {
 			continue
 		}
 
