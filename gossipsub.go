@@ -631,8 +631,6 @@ func (gs *GossipSubRouter) HandleRPC(rpc *RPC) {
 }
 
 func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.ControlIWant {
-
-	fmt.Println("some say I have: ", ctl)
 	// we ignore IHAVE gossip from any peer whose score is below the gossip threshold
 	score := gs.score.Score(p)
 	if score < gs.gossipThreshold {
@@ -689,8 +687,6 @@ func (gs *GossipSubRouter) handleIHave(p peer.ID, ctl *pb.ControlMessage) []*pb.
 		iwantlst = append(iwantlst, mid)
 	}
 
-	fmt.Println("I say iwant: ", iwantlst)
-
 	// ask in random order
 	shuffleStrings(iwantlst)
 
@@ -707,11 +703,7 @@ func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.
 	// we don't respond to IWANT requests from any peer whose score is below the gossip threshold
 
 	score := gs.score.Score(p)
-
-	fmt.Println("Score: ", score)
-	fmt.Println("gossipThreshold: ", gs.gossipThreshold)
 	if score < gs.gossipThreshold {
-		fmt.Printf("IWANT: ignoring peer %s with score below threshold [score = %f]", p, score)
 		log.Debugf("IWANT: ignoring peer %s with score below threshold [score = %f]", p, score)
 		return nil
 	}
@@ -719,7 +711,6 @@ func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.
 	ihave := make(map[string]*pb.Message)
 	for _, iwant := range ctl.GetIwant() {
 		for _, mid := range iwant.GetMessageIDs() {
-			fmt.Printf("%s say: I want: %s", p, mid)
 			msg, count, ok := gs.mcache.GetForPeer(mid, p)
 			if !ok {
 				continue
@@ -737,8 +728,6 @@ func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.
 			ihave[mid] = msg.Message
 		}
 	}
-
-	fmt.Println("I want: ", ihave)
 
 	if len(ihave) == 0 {
 		return nil
@@ -997,7 +986,6 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 	// for gossiponly topic
 	_, ok := gs.gossiponly[topic]
 	if ok {
-		fmt.Println("gossiponly topic publish")
 		return
 	}
 
@@ -1006,7 +994,6 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 	// any peers in the topic?
 	tmap, ok := gs.p.topics[topic]
 	if !ok {
-		fmt.Println("No peers in the topic.")
 		return
 	}
 
@@ -1376,7 +1363,6 @@ func (gs *GossipSubRouter) heartbeatTimer() {
 }
 
 func (gs *GossipSubRouter) heartbeat() {
-	fmt.Println("-----------------One Heartbeat----------------")
 	start := time.Now()
 	defer func() {
 		if gs.params.SlowHeartbeatWarning > 0 {
@@ -1631,10 +1617,8 @@ func (gs *GossipSubRouter) heartbeat() {
 
 	// send message to gossiponly topic
 	for topic := range gs.gossiponly {
-		fmt.Println("Heartbeat emitGossip")
 		//var mypeers map[peer.ID]struct{}
-		mypeers := make(map[peer.ID]struct{})
-		gs.emitGossip(topic, mypeers)
+		gs.emitGossip(topic, nil)
 	}
 
 	// send coalesced GRAFT/PRUNE messages (will piggyback gossip)
@@ -1752,7 +1736,6 @@ func (gs *GossipSubRouter) sendGraftPrune(tograft, toprune map[peer.ID][]string,
 // of this topic.
 func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}) {
 	mids := gs.mcache.GetGossipIDs(topic)
-	fmt.Println("mids: ", mids)
 	if len(mids) == 0 {
 		return
 	}
@@ -1792,8 +1775,6 @@ func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}
 	}
 	peers = peers[:target]
 
-	fmt.Println("Peers: ", peers)
-
 	// Emit the IHAVE gossip to the selected peers.
 	for _, p := range peers {
 		peerMids := mids
@@ -1805,8 +1786,6 @@ func (gs *GossipSubRouter) emitGossip(topic string, exclude map[peer.ID]struct{}
 			shuffleStrings(mids)
 			copy(peerMids, mids)
 		}
-		fmt.Println("topic: ", topic)
-		fmt.Println("peerMids: ", peerMids)
 		gs.enqueueGossip(p, &pb.ControlIHave{TopicID: &topic, MessageIDs: peerMids})
 	}
 }
@@ -1816,7 +1795,6 @@ func (gs *GossipSubRouter) flush() {
 	for p, ihave := range gs.gossip {
 		delete(gs.gossip, p)
 		out := rpcWithControl(nil, ihave, nil, nil, nil)
-		fmt.Println("SendRPC: ", out)
 		gs.sendRPC(p, out)
 	}
 
@@ -2013,6 +1991,5 @@ func shuffleStrings(lst []string) {
 func IsGossipOnlyTopic(topic string) bool {
 	// "alll-gasd-type: GossipOnlyTopic"
 	flag := "GossipOnlyTopic"
-	fmt.Println("IsGossipOnlyTopic: ", topic)
 	return strings.Contains(topic, flag)
 }
